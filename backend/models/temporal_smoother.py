@@ -58,14 +58,37 @@ class TemporalSmoother:
         ]
         avg_confidence = float(np.mean(majority_confidences))
 
-        # Hysteresis: only change state if confidence is high enough
-        if self.current_state is None:
-            self.current_state = majority_prediction
-        elif self.current_state != majority_prediction:
-            if avg_confidence >= self.hysteresis_threshold:
-                self.current_state = majority_prediction
+        # Improved Hysteresis Logic:
+        # - Easy to enter "drone detected" state (lower threshold)
+        # - Hard to leave "drone detected" state (higher threshold)
+        # - This prevents flickering when drone is continuously present
 
-        return self.current_state, avg_confidence
+        if self.current_state is None:
+            # First prediction
+            self.current_state = majority_prediction
+        elif self.current_state == 0:
+            # Currently "Non-Drone" - switch to drone if detected with low threshold
+            if majority_prediction != 0 and avg_confidence >= 0.3:  # Easy to detect
+                self.current_state = majority_prediction
+        else:
+            # Currently showing a drone detection
+            if majority_prediction == 0:
+                # Want to switch back to "Non-Drone" - require high confidence
+                if avg_confidence >= 0.85:  # Hard to clear
+                    self.current_state = 0
+            elif majority_prediction != self.current_state:
+                # Switching between different drone types - moderate threshold
+                if avg_confidence >= self.hysteresis_threshold:
+                    self.current_state = majority_prediction
+
+        # Return confidence for current_state, not majority_prediction
+        current_state_confidences = [
+            conf for pred, conf in zip(self.prediction_history, self.confidence_history)
+            if pred == self.current_state
+        ]
+        final_confidence = float(np.mean(current_state_confidences)) if current_state_confidences else avg_confidence
+
+        return self.current_state, final_confidence
 
     def reset(self):
         """Reset smoother state"""

@@ -138,9 +138,16 @@ class InferencePipeline:
         # Determine detection
         detected = smoothed_conf >= CONFIDENCE_THRESHOLD and smoothed_pred > 0
 
+        # Get drone name
+        drone_name = CLASS_NAMES[smoothed_pred] if not is_ood else 'Unknown Drone'
+
+        # Get tactical specifications
+        from config import DRONE_SPECS
+        specs = DRONE_SPECS.get(drone_name, {})
+
         result = {
             'detected': detected,
-            'class_name': CLASS_NAMES[smoothed_pred] if not is_ood else 'Unknown Drone',
+            'class_name': drone_name,
             'class_id': int(smoothed_pred),
             'confidence': float(smoothed_conf),
             'is_ood': is_ood,
@@ -148,7 +155,20 @@ class InferencePipeline:
             'stage': 'full_pipeline',
             'raw_prediction': int(predicted),
             'raw_confidence': float(confidence),
-            'dominant_frequency': self.harmonic_filter.get_dominant_frequency(audio)
+            'dominant_frequency': self.harmonic_filter.get_dominant_frequency(audio),
+            # Tactical intel
+            'specs': {
+                'weight_kg': specs.get('weight_kg'),
+                'weight_class': specs.get('weight_class'),
+                'max_range_km': specs.get('max_range_km'),
+                'max_flight_time_min': specs.get('max_flight_time_min'),
+                'max_speed_kph': specs.get('max_speed_kph'),
+                'threat_level': specs.get('threat_level'),
+                'camera': specs.get('camera'),
+                'acoustic_signature': specs.get('acoustic_signature'),
+                'description': specs.get('description'),
+                'special_note': specs.get('special_note')
+            }
         }
 
         return result

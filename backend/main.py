@@ -17,10 +17,16 @@ from config import HOST, PORT, SAMPLE_RATE, CHUNK_SAMPLES, MODEL_DIR
 # Initialize FastAPI app
 app = FastAPI(title="SkyGuard Tactical API", version="1.0.0")
 
-# CORS middleware for frontend
+# CORS middleware for frontend (localhost + file:// for local HTML)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
+        "null"  # Allows file:// protocol
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -129,7 +135,21 @@ async def websocket_audio(websocket: WebSocket):
                 try:
                     # Decode base64 audio
                     audio_bytes = base64.b64decode(message['data'])
+
+                    # Validate audio size (max 10 seconds)
+                    max_samples = SAMPLE_RATE * 10  # 10 seconds
+                    if len(audio_bytes) > max_samples * 4:  # 4 bytes per float32
+                        raise ValueError(f"Audio too long: max 10 seconds ({max_samples * 4} bytes)")
+
+                    # Check 4-byte alignment for float32
+                    if len(audio_bytes) % 4 != 0:
+                        raise ValueError(f"Audio not 4-byte aligned (got {len(audio_bytes)} bytes)")
+
                     audio = np.frombuffer(audio_bytes, dtype=np.float32)
+
+                    # Validate audio is not empty
+                    if len(audio) == 0:
+                        raise ValueError("Audio is empty")
 
                     # Process through pipeline
                     result = pipeline.process_audio(audio)
